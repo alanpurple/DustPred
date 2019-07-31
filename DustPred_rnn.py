@@ -29,8 +29,10 @@ def inference(path,model):
     test_path = path+'/test_data'
     data=np.load(test_path)
     # region=data[:,0]
-    # month=data[:,2]
-    # day=data[:,3]
+    #month=data[:,2]
+    #day=data[:,3]
+    #test_days=[m*30+d for m,d in zip(month,day)]
+    #test_days=np.asarray(test_days)
     test_dust=[[[elem[2*i],elem[2*i+1]] for i in range(2,7)] for elem in data]
     test_dust=np.asarray(test_dust)
     pred=model.predict(test_dust)
@@ -50,6 +52,7 @@ def get_simplegru_model(num_units=64,num_layers=2,dropout=0.1):
     # region=Input((),name='region_input',dtype=tf.uint8)
     # month=Input((1),name='month_input',dtype=tf.float32)
     # day=Input((1),name='day_input',dtype=tf.float32)
+    #days=Input((1),name='days_input',dtype=tf.float32)
     #cells=[layers.GRUCell(num_units) for _ in range(num_layers-1)]
     #cells.append(layers.GRUCell(num_units,dropout=dropout))
     #multi_gru=layers.RNN(cells,name='multi-lstm')
@@ -64,8 +67,8 @@ def get_simplegru_model(num_units=64,num_layers=2,dropout=0.1):
     #region_one=layers.Lambda(region_one_hot,name='region_one_hot')(region)
     #month_one=layers.Lambda(month_one_hot,name='month_one_hot')(month)
     # (batch,num_units+10+12)
-    # feature_concat=layers.Concatenate()([feature,month,day])
-    # feature_concat=layers.Dropout(0.1)(feature_concat)
+    #feature_concat=layers.Concatenate()([feature,days])
+    #feature_concat=layers.Dropout(0.1)(feature_concat)
     dense_final=layers.Dense(16,activations.relu)(feature)
 
     tiny=layers.Dense(1,name='tiny_dense')(dense_final)
@@ -120,8 +123,8 @@ if __name__ == '__main__':
         labels=np.load(train_label_file)
 
         # region=data[:,0]
-        # month=data[:,2]
-        # day=data[:,3]
+        #month=data[:,2]
+        #day=data[:,3]
 
         ### test
         #idx= (month>2)&(month<5)
@@ -134,26 +137,30 @@ if __name__ == '__main__':
         train_dust=[]
         labels_tiny=[]
         labels_micro=[]
+        #days=[]
 
         for idx,elem in enumerate(data):
+            #day_temp=month[idx]*30+day[idx]
             for i in range(4,7):
                 temp_arr=[[elem[2*j],elem[2*j+1]] for j in range(2,i)]
                 temp_arr+=[[0.,0.]]*(7-i)
                 train_dust.append(temp_arr)
                 labels_tiny.append(elem[2*i])
                 labels_micro.append(elem[2*i+1])
+                #days.append(day_temp)
             temp_arr=[[elem[2*j],elem[2*j+1]] for j in range(2,7)]
             train_dust.append(temp_arr)
             labels_tiny.append(labels[idx][0])
             labels_micro.append(labels[idx][1])
+            #days.append(day_temp)
         
         # train_dust=[[[elem[2*i],elem[2*i+1]] for i in range(2,7)] for elem in data]
         train_dust=np.asarray(train_dust)
         labels_tiny=np.asarray(labels_tiny)
         labels_micro=np.asarray(labels_micro)
+        #days=np.asarray(days)
 
-        model.fit(train_dust,
-               {'tiny_dense':labels_tiny,'micro_dense':labels_micro},
+        model.fit(train_dust,[labels_tiny,labels_micro],
                batch_size=64,epochs=EPOCHS,validation_split=0.1,callbacks=cbs)
 
         nsml.save(EPOCHS)
