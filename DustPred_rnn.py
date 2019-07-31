@@ -15,11 +15,9 @@ OUTPUT_DIM = 2 # t-time의 (미세, 초미세)
 
 def bind_model(model):
     def save(path,**kwargs):
-        # model.save(os.path.join(path,'alan_dust_model2.h5'))
         model.save_weights(os.path.join(path, 'model_alan.tf'),save_format='tf')
 
     def load(path):
-        # model=models.load_model(os.path.join(path,'alan_dust_model2.h5'))
         model.load_weights(os.path.join(path,'model_alan.tf'))
 
     def infer(path):
@@ -30,12 +28,13 @@ def bind_model(model):
 def inference(path,model):
     test_path = path+'/test_data'
     data=np.load(test_path)
-    #region=data[:,0]
-    #month=data[:,2]
+    # region=data[:,0]
+    # month=data[:,2]
+    # day=data[:,3]
     test_dust=[[[elem[2*i],elem[2*i+1]] for i in range(2,7)] for elem in data]
     test_dust=np.asarray(test_dust)
     pred=model.predict(test_dust).tolist()
-    result=[[i,elem[-1]] for i,elem in enumerate(pred)]
+    result=[[i,[elem,pred[1][i]]] for i,elem in enumerate(pred[0])]
     return result
 
 #def region_one_hot(region):
@@ -46,41 +45,31 @@ def inference(path,model):
 
 def get_simplegru_model(num_units=64,num_layers=2,dropout=0.1):
     input=Input((5,2),name='dust_input')
-    inputs_expanded=layers.ZeroPadding1D((0,1))(input)
-    #region=Input((),name='region_input',dtype=tf.uint8)
-    #month=Input((),name='month_input',dtype=tf.float32)
+    # region=Input((),name='region_input',dtype=tf.uint8)
+    # month=Input((1),name='month_input',dtype=tf.float32)
+    # day=Input((1),name='day_input',dtype=tf.float32)
     #cells=[layers.GRUCell(num_units) for _ in range(num_layers-1)]
     #cells.append(layers.GRUCell(num_units,dropout=dropout))
     #multi_gru=layers.RNN(cells,name='multi-lstm')
     multi_gru=layers.LSTM(num_units,activation='relu')
 
-    # batch X num_units
-    output=multi_gru(inputs_expanded)
-
-    #  batch X 6 X num_units 
-    repeated=layers.RepeatVector(6)(output)
-
-    # batch X 6 X num_units
-    lstm_seq=layers.LSTM(num_units,return_sequences=True,activation='relu')(repeated)
+    output=multi_gru(input)
 
     #flattened=layers.Flatten()(inputs)
 
     # (batch,num_units)
-    #feature=layers.Dense(num_units,activations.relu)(output)
+    feature=layers.Dense(num_units,activations.relu)(output)
     #region_one=layers.Lambda(region_one_hot,name='region_one_hot')(region)
     #month_one=layers.Lambda(month_one_hot,name='month_one_hot')(month)
     # (batch,num_units+10+12)
-    #feature_concat=layers.Concatenate()([feature,month_one])
-    #feature_concat=layers.Dropout(0.1)(feature_concat)
-    #dense_final=layers.Dense(16,activations.relu)(feature)
+    # feature_concat=layers.Concatenate()([feature,month,day])
+    # feature_concat=layers.Dropout(0.1)(feature_concat)
+    dense_final=layers.Dense(16,activations.relu)(feature)
 
-    #tiny=layers.Dense(1,name='tiny_dense')(dense_final)
-    #micro=layers.Dense(1,name='micro_dense')(dense_final)
+    tiny=layers.Dense(1,name='tiny_dense')(dense_final)
+    micro=layers.Dense(1,name='micro_dense')(dense_final)
 
-    #model=Model(inputs=[inputs,region,month],outputs=[tiny,micro])
-
-    final=layers.TimeDistributed(layers.Dense(2))(lstm_seq)
-    model=Model(inputs=input,outputs=final)
+    model=Model(inputs=input,outputs=[tiny,micro])
 
     return model
 
@@ -128,8 +117,9 @@ if __name__ == '__main__':
         data=np.load(train_dataset_path)
         labels=np.load(train_label_file)
 
-        #region=data[:,0]
-        #month=data[:,2]
+        # region=data[:,0]
+        # month=data[:,2]
+        # day=data[:,3]
 
         ### test
         #idx= (month>2)&(month<5)
@@ -139,18 +129,29 @@ if __name__ == '__main__':
         #month=data[:,2]
         #############
 
+        train_dust=[]
+        labels_tiny=[]
+        labels_micro=[]
+
+        for idx,elem in enumerate(data):
+            for i in range(4,7):
+                temp_arr=[[elem[2*j],elem[2*j+1]] for j in range(2,i)]
+                temp_arr+=[[0.,0.]]*(7-i)
+                train_dust.append(temp_arr)
+                labels_tiny.append(elem[2*i])
+                labels_micro.append(elem[2*i+1])
+            temp_arr=[[elem[2*j],elem[2*j+1]] for j in range(2,7)]
+            train_dust.append(temp_arr)
+            labels_tiny.append(labels[idx][0])
+            labels_micro.append(labels[idx][1])
         
-        train_dust=[[[elem[2*i],elem[2*i+1]] for i in range(2,7)] for elem in data]
+        # train_dust=[[[elem[2*i],elem[2*i+1]] for i in range(2,7)] for elem in data]
         train_dust=np.asarray(train_dust)
-        #model.fit({'region_input':region,'month_input':month,'dust_input':train_dust},
-        #        {'tiny_dense':labels[:,0],'micro_dense':labels[:,1]},
-        #        batch_size=128,epochs=EPOCHS,validation_split=0.1)
+        labels_tiny=np.asarray(labels_tiny)
+        labels_micro=np.asarray(labels_micro)
 
-        train_out=[np.array([[elem[2*i],elem[2*i+1]] for i in range(2,7)]) for elem in data]
-        train_out=[np.append(elem,[labels[idx]],0) for idx,elem in enumerate(train_out)]
-        train_out=np.asarray(train_out)
-
-        model.fit(train_dust,train_out,
-                batch_size=64,epochs=EPOCHS,validation_split=0.1,callbacks=cbs)
+        model.fit(train_dust,
+               {'tiny_dense':labels_tiny,'micro_dense':labels_micro},
+               batch_size=64,epochs=EPOCHS,validation_split=0.1,callbacks=cbs)
 
         nsml.save(EPOCHS)

@@ -1,3 +1,5 @@
 v16/
 *.pyproj
 *.sln
+*.code-workspace
+*.md
