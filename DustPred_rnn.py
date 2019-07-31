@@ -33,8 +33,10 @@ def inference(path,model):
     # day=data[:,3]
     test_dust=[[[elem[2*i],elem[2*i+1]] for i in range(2,7)] for elem in data]
     test_dust=np.asarray(test_dust)
-    pred=model.predict(test_dust).tolist()
-    result=[[i,[elem,pred[1][i]]] for i,elem in enumerate(pred[0])]
+    pred=model.predict(test_dust)
+    tiny_pred=pred[0].tolist()
+    micro_pred=pred[1].tolist()
+    result=[[i,[elem,micro_pred[i]]] for i,elem in enumerate(tiny_pred)]
     return result
 
 #def region_one_hot(region):

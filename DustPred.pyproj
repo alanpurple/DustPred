@@ -23,6 +23,7 @@
   <ItemGroup>
     <Compile Include="data_loader.py" />
     <Compile Include="DustPred.py" />
+    <Compile Include="DustPred_rnn.py" />
     <Compile Include="evaluation.py" />
     <Compile Include="setup.py" />
   </ItemGroup>
